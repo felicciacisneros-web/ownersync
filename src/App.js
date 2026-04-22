@@ -198,7 +198,13 @@ function StatementBuilder({ token }) {
         <div style={{display:"flex",gap:8}}>
           <button style={view==="builder"?S.tabA:S.tab} onClick={()=>setView("builder")}>Editor</button>
           <button style={view==="preview"?S.tabA:S.tab} onClick={()=>setView("preview")}>Preview</button>
-          {view==="preview" && <button style={{...S.btnO, background:"#16a34a", color:"#fff", border:"none"}} onClick={()=>window.print()}>⬇ Download PDF</button>}
+          {view==="preview" && <button style={{...S.btnO, background:"#16a34a", color:"#fff", border:"none"}} onClick={()=>{
+  const content = document.getElementById("statement-preview").innerHTML;
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>Statement</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
+  w.document.close();
+  w.print();
+}}>⬇ Download PDF</button>}
           <button style={S.btnO} onClick={()=>setStep("select")}>← Back</button>
         </div>
       </div>
