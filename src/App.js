@@ -10,6 +10,12 @@ const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const LOGO_URL = "https://ownersync.vercel.app/logo2.jpg";
 
+const OWNER_PROPERTIES = [
+  "Beautiful Victorian, Amazing View!",
+  "Amazing view, Modern Space",
+  "Renovated Gem Minutes From American Family Field",
+];
+
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -114,12 +120,14 @@ function StatementBuilder({ token }) {
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
 
+  const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
+
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
     const amt = channel === "Airbnb"
       ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
       : parseFloat(r.totalPrice||0);
-    const rate = getPMRate(r);
+    const rate = isOwnerProperty ? 0 : getPMRate(r);
     if (!acc[channel]) acc[channel] = { amt: 0, pmTotal: 0 };
     acc[channel].amt += amt;
     acc[channel].pmTotal += amt * rate;
@@ -132,7 +140,7 @@ function StatementBuilder({ token }) {
   const vf=parseFloat(platformFees.vrboFee)||0, sf=parseFloat(platformFees.stripeFee)||0;
   const totalPlatformFees=af+at+vf+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
-  const pmRows = [
+  const pmRows = isOwnerProperty ? [] : [
     ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
       label: ch,
       amt,
@@ -214,6 +222,7 @@ function StatementBuilder({ token }) {
             <div style={S.card}>
               <h3 style={{margin:"0 0 4px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Revenue</h3>
               <p style={{color:"#64748b",fontSize:12,margin:"0 0 16px"}}>{selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
+              {isOwnerProperty && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
               {Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th><th style={{...S.th,textAlign:"right"}}>PM%</th></tr></thead>
@@ -222,20 +231,20 @@ function StatementBuilder({ token }) {
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
                         <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
-                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{amt>0?Math.round((pmTotal/amt)*100):25}%</td>
+                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100):25+"%"}</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
                   </tbody>
                 </table>}
-              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
+              {!isOwnerProperty && <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
                 <label style={S.lbl}>Other (Direct booking, Furnished Finder) — always 15%</label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <input style={S.inpSm} type="number" value={midtermRevenue} onChange={e=>setMidtermRevenue(e.target.value)} placeholder="0.00"/>
                   <input style={S.inpSm} value={midtermNote} onChange={e=>setMidtermNote(e.target.value)} placeholder="e.g. John Smith"/>
                 </div>
                 {midtermAmt > 0 && <p style={{color:"#64748b",fontSize:11,marginTop:6}}>PM Fee (15%): {fmt(midtermAmt*0.15)}</p>}
-              </div>
+              </div>}
             </div>
             <div style={S.card}>
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Platform Fees</h3>
@@ -268,7 +277,7 @@ function StatementBuilder({ token }) {
                       <td style={S.td}><div style={{display:"flex",gap:4}}><input style={{...S.inpInline,width:60}} value={exp.note} onChange={e=>setExtraExpenses(prev=>prev.map((x,idx)=>idx===i?{...x,note:e.target.value}:x))} placeholder="—"/><button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:12}} onClick={()=>setExtraExpenses(prev=>prev.filter((_,idx)=>idx!==i))}>✕</button></div></td>
                     </tr>
                   ))}
-                  <tr style={{background:"#0f172a"}}><td style={S.td}><strong>PM Fee</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(pmFee)}</strong></td><td style={S.td}><span style={{background:"#1e3a5f",color:"#60a5fa",fontSize:10,padding:"2px 6px",borderRadius:4}}>Auto</span></td></tr>
+                  {!isOwnerProperty && <tr style={{background:"#0f172a"}}><td style={S.td}><strong>PM Fee</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(pmFee)}</strong></td><td style={S.td}><span style={{background:"#1e3a5f",color:"#60a5fa",fontSize:10,padding:"2px 6px",borderRadius:4}}>Auto</span></td></tr>}
                 </tbody>
               </table>
               <button style={S.btnG} onClick={()=>setExtraExpenses(prev=>[...prev,{category:"",amount:"",note:""}])}>+ Add expense</button>
@@ -293,7 +302,7 @@ function StatementBuilder({ token }) {
                   <span>{ch}</span><span>{fmt(amt)}</span>
                 </div>
               ))}
-              {midtermAmt > 0 && (
+              {midtermAmt > 0 && !isOwnerProperty && (
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
                   <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
                   <span>{fmt(midtermAmt)}</span>
