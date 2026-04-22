@@ -114,13 +114,11 @@ function StatementBuilder({ token }) {
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
 
-  // Group reservations by channel, tracking PM rate per reservation
   const revenueByChannel = reservations.reduce((acc, r) => {
     const ch = getChannel(r);
-    const ch = getChannel(r);
-const amt = ch === "Airbnb"
-  ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
-  : parseFloat(r.totalPrice||0);
+    const amt = ch === "Airbnb"
+      ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
+      : parseFloat(r.totalPrice||0);
     const rate = getPMRate(r);
     if (!acc[ch]) acc[ch] = { amt: 0, pmTotal: 0 };
     acc[ch].amt += amt;
@@ -129,24 +127,20 @@ const amt = ch === "Airbnb"
   }, {});
 
   const midtermAmt = parseFloat(midtermRevenue)||0;
-
   const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v.amt,0) + midtermAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0, at=parseFloat(platformFees.airbnbTax)||0;
   const vf=parseFloat(platformFees.vrboFee)||0, sf=parseFloat(platformFees.stripeFee)||0;
   const totalPlatformFees=af+at+vf+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
-
-  // PM fees: per channel from Hostaway + midterm manual always 15%
   const pmRows = [
     ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
       label: ch,
       amt,
       pmTotal,
-      rate: Math.round((pmTotal / amt) * 100) || 25,
+      rate: amt > 0 ? Math.round((pmTotal/amt)*100) : 25,
     })),
-    ...(midtermAmt > 0 ? [{ label: "Other (Direct booking, Furnished Finder)", amt: midtermAmt, pmTotal: midtermAmt * 0.15, rate: 15 }] : []),
+    ...(midtermAmt > 0 ? [{ label:"Other (Direct booking, Furnished Finder)", amt:midtermAmt, pmTotal:midtermAmt*0.15, rate:15 }] : []),
   ];
-
   const pmFee = pmRows.reduce((s,r)=>s+r.pmTotal, 0);
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
@@ -157,7 +151,8 @@ const amt = ch === "Airbnb"
   const handleDownloadPDF = () => {
     const content = document.getElementById("statement-preview").innerHTML;
     const w = window.open("","_blank");
-w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);    w.document.close();
+    w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
+    w.document.close();
     setTimeout(()=>w.print(), 500);
   };
 
@@ -227,7 +222,7 @@ w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListin
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
                         <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
-                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{Math.round((pmTotal/amt)*100)||25}%</td>
+                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{amt>0?Math.round((pmTotal/amt)*100):25}%</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
@@ -284,8 +279,8 @@ w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListin
       ):(
         <div style={{display:"flex",justifyContent:"center",padding:"32px 24px"}}>
           <div id="statement-preview" style={{background:"#fff",color:"#1e293b",borderRadius:8,padding:"40px 48px",width:580,fontFamily:"Georgia,serif",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}}>
-            <div style={{textAlign:"center",marginBottom:24}}>
-              <img src={LOGO_URL} alt="Logo" style={{height:80,objectFit:"contain"}}/>
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+              <img src={LOGO_URL} alt="Logo" style={{height:60,objectFit:"contain"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:32,borderBottom:"3px solid #1e293b",paddingBottom:16}}>
               <div><div style={{fontSize:22,fontWeight:"bold"}}>Monthly Statement</div><div style={{fontSize:13,color:"#475569",marginTop:4}}>{selectedListing?.name}</div></div>
@@ -300,7 +295,7 @@ w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListin
               ))}
               {midtermAmt > 0 && (
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>Other (Direct booking, Furnished Finder){midtermNote ? ` — ${midtermNote}` : ""}</span>
+                  <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
                   <span>{fmt(midtermAmt)}</span>
                 </div>
               )}
