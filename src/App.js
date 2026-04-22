@@ -115,14 +115,14 @@ function StatementBuilder({ token }) {
   };
 
   const revenueByChannel = reservations.reduce((acc, r) => {
-    const ch = getChannel(r);
-    const amt = ch === "Airbnb"
+    const channel = getChannel(r);
+const amt = channel === "Airbnb"
       ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
       : parseFloat(r.totalPrice||0);
     const rate = getPMRate(r);
-    if (!acc[ch]) acc[ch] = { amt: 0, pmTotal: 0 };
-    acc[ch].amt += amt;
-    acc[ch].pmTotal += amt * rate;
+    if (!acc[channel]) acc[channel] = { amt: 0, pmTotal: 0 };
+    acc[channel].amt += amt;
+    acc[channel].pmTotal += amt * rate;
     return acc;
   }, {});
 
