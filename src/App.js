@@ -10,6 +10,15 @@ const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const PM_RATES = { Airbnb: 0.25, VRBO: 0.25, Direct: 0.15, Midterm: 0.15 };
 
+const PRINT_STYLE = `
+@media print {
+  body * { visibility: hidden; }
+  #statement-preview, #statement-preview * { visibility: visible; }
+  #statement-preview { position: fixed; top: 0; left: 0; width: 100%; }
+  @page { margin: 1cm; }
+}
+`;
+
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -69,6 +78,13 @@ function StatementBuilder({ token }) {
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
+
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.innerHTML = PRINT_STYLE;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -182,6 +198,7 @@ function StatementBuilder({ token }) {
         <div style={{display:"flex",gap:8}}>
           <button style={view==="builder"?S.tabA:S.tab} onClick={()=>setView("builder")}>Editor</button>
           <button style={view==="preview"?S.tabA:S.tab} onClick={()=>setView("preview")}>Preview</button>
+          {view==="preview" && <button style={{...S.btnO, background:"#16a34a", color:"#fff", border:"none"}} onClick={()=>window.print()}>⬇ Download PDF</button>}
           <button style={S.btnO} onClick={()=>setStep("select")}>← Back</button>
         </div>
       </div>
@@ -249,7 +266,7 @@ function StatementBuilder({ token }) {
         </div>
       ):(
         <div style={{display:"flex",justifyContent:"center",padding:"32px 24px"}}>
-          <div style={{background:"#fff",color:"#1e293b",borderRadius:8,padding:"40px 48px",width:580,fontFamily:"Georgia,serif",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}}>
+          <div id="statement-preview" style={{background:"#fff",color:"#1e293b",borderRadius:8,padding:"40px 48px",width:580,fontFamily:"Georgia,serif",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:32,borderBottom:"3px solid #1e293b",paddingBottom:16}}>
               <div><div style={{fontSize:22,fontWeight:"bold"}}>Monthly Statement</div><div style={{fontSize:13,color:"#475569",marginTop:4}}>{selectedListing?.name}</div></div>
               <div style={{fontSize:15,color:"#475569",fontStyle:"italic"}}>{MONTHS[selectedMonth]} {selectedYear}</div>
