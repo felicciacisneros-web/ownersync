@@ -99,7 +99,7 @@ function StatementBuilder({ token }) {
       const all = resData.result||[];
       const seen = new Set();
       const results = all.filter(r => {
-        const payout = parseFloat(r.airbnbExpectedPayoutAmount||0);
+        const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
         const arrival = (r.arrivalDate||"").substring(0,10);
         const status = (r.status||"").toLowerCase();
         const key = `${arrival}-${payout}`;
@@ -117,7 +117,10 @@ function StatementBuilder({ token }) {
   // Group reservations by channel, tracking PM rate per reservation
   const revenueByChannel = reservations.reduce((acc, r) => {
     const ch = getChannel(r);
-    const amt = parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0);
+    const ch = getChannel(r);
+const amt = ch === "Airbnb"
+  ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
+  : parseFloat(r.totalPrice||0);
     const rate = getPMRate(r);
     if (!acc[ch]) acc[ch] = { amt: 0, pmTotal: 0 };
     acc[ch].amt += amt;
