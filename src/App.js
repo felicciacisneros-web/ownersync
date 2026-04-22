@@ -154,8 +154,7 @@ function StatementBuilder({ token }) {
   const handleDownloadPDF = () => {
     const content = document.getElementById("statement-preview").innerHTML;
     const w = window.open("","_blank");
-    w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body><div style="text-align:center;margin-bottom:24px;"><img src="${LOGO_URL}" style="height:80px;object-fit:contain;" /></div>${content}</body></html>`);
-    w.document.close();
+w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);    w.document.close();
     setTimeout(()=>w.print(), 500);
   };
 
