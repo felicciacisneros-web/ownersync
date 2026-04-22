@@ -8,16 +8,7 @@ const EXPENSE_CATEGORIES = [
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const PM_RATES = { Airbnb: 0.25, VRBO: 0.25, Direct: 0.15, Midterm: 0.15 };
-
-const PRINT_STYLE = `
-@media print {
-  body * { visibility: hidden; }
-  #statement-preview, #statement-preview * { visibility: visible; }
-  #statement-preview { position: fixed; top: 0; left: 0; width: 100%; }
-  @page { margin: 1cm; }
-}
-`;
+const LOGO_URL = "https://ownersync.vercel.app/Short___Suite_Home_Stay_Management__Logo.jpg";
 
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
@@ -42,11 +33,10 @@ function AuthScreen({ onAuth }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#0f172a,#1e293b)", fontFamily:"Georgia,serif" }}>
       <div style={{ background:"#1e293b", border:"1px solid #334155", borderRadius:16, padding:"40px 48px", width:360, boxShadow:"0 25px 50px rgba(0,0,0,0.5)" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-          <span style={{ fontSize:28, color:"#f59e0b" }}>⌂</span>
-          <span style={{ fontSize:22, fontWeight:"bold", color:"#f1f5f9" }}>OwnerSync</span>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16 }}>
+          <img src={LOGO_URL} alt="Logo" style={{ height:64, objectFit:"contain" }} />
         </div>
-        <p style={{ color:"#64748b", fontSize:14, marginBottom:28 }}>Connect your Hostaway account to generate owner statements</p>
+        <p style={{ color:"#64748b", fontSize:14, marginBottom:28, textAlign:"center" }}>Connect your Hostaway account to generate owner statements</p>
         <div style={{ marginBottom:16 }}><label style={{ display:"block", fontSize:12, color:"#94a3b8", marginBottom:6, textTransform:"uppercase" }}>Account ID</label><input style={inp} value={accountId} onChange={e=>setAccountId(e.target.value)} placeholder="123456"/></div>
         <div style={{ marginBottom:16 }}><label style={{ display:"block", fontSize:12, color:"#94a3b8", marginBottom:6, textTransform:"uppercase" }}>API Secret</label><input style={inp} type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="••••••••••••"/></div>
         {error && <p style={{ color:"#f87171", fontSize:13, marginBottom:12 }}>{error}</p>}
@@ -61,6 +51,11 @@ function getChannel(r) {
   if (s.includes("airbnb")) return "Airbnb";
   if (s.includes("vrbo") || s.includes("homeaway")) return "VRBO";
   return "Direct";
+}
+
+function getPMRate(r) {
+  const nights = parseFloat(r.nights || 0);
+  return nights >= 30 ? 0.15 : 0.25;
 }
 
 function StatementBuilder({ token }) {
@@ -78,13 +73,6 @@ function StatementBuilder({ token }) {
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
-
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.innerHTML = PRINT_STYLE;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -126,29 +114,50 @@ function StatementBuilder({ token }) {
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
 
+  // Group reservations by channel, tracking PM rate per reservation
   const revenueByChannel = reservations.reduce((acc, r) => {
     const ch = getChannel(r);
     const amt = parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0);
-    acc[ch] = (acc[ch] || 0) + amt;
+    const rate = getPMRate(r);
+    if (!acc[ch]) acc[ch] = { amt: 0, pmTotal: 0 };
+    acc[ch].amt += amt;
+    acc[ch].pmTotal += amt * rate;
     return acc;
   }, {});
 
   const midtermAmt = parseFloat(midtermRevenue)||0;
-  if (midtermAmt > 0) revenueByChannel["Midterm"] = midtermAmt;
 
-  const grossRevenue = Object.values(revenueByChannel).reduce((a,b)=>a+b,0);
+  const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v.amt,0) + midtermAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0, at=parseFloat(platformFees.airbnbTax)||0;
   const vf=parseFloat(platformFees.vrboFee)||0, sf=parseFloat(platformFees.stripeFee)||0;
   const totalPlatformFees=af+at+vf+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
-  const pmByChannel = Object.entries(revenueByChannel).map(([ch,amt])=>({ ch, amt, fee: amt*(PM_RATES[ch]||0.25) }));
-  const pmFee = pmByChannel.reduce((s,x)=>s+x.fee,0);
+
+  // PM fees: per channel from Hostaway + midterm manual always 15%
+  const pmRows = [
+    ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
+      label: ch,
+      amt,
+      pmTotal,
+      rate: Math.round((pmTotal / amt) * 100) || 25,
+    })),
+    ...(midtermAmt > 0 ? [{ label: "Other (Direct booking, Furnished Finder)", amt: midtermAmt, pmTotal: midtermAmt * 0.15, rate: 15 }] : []),
+  ];
+
+  const pmFee = pmRows.reduce((s,r)=>s+r.pmTotal, 0);
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
   const netRevenue=totalRevenueReceived-totalExpenses;
   const fmt=n=>"$"+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
   const fmtS=n=>(n<0?"-":"")+"$"+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
-  const chLabel = ch => ch==="Midterm" ? "Other (Direct booking, Furnished Finder)" : ch;
+
+  const handleDownloadPDF = () => {
+    const content = document.getElementById("statement-preview").innerHTML;
+    const w = window.open("","_blank");
+    w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body><div style="text-align:center;margin-bottom:24px;"><img src="${LOGO_URL}" style="height:80px;object-fit:contain;" /></div>${content}</body></html>`);
+    w.document.close();
+    setTimeout(()=>w.print(), 500);
+  };
 
   const S={
     wrap:{minHeight:"100vh",background:"#0f172a",fontFamily:"Georgia,serif",color:"#e2e8f0"},
@@ -169,7 +178,7 @@ function StatementBuilder({ token }) {
 
   if (step==="select") return (
     <div style={S.wrap}>
-      <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:24,color:"#f59e0b"}}>⌂</span><span style={{fontSize:20,fontWeight:"bold",color:"#f1f5f9"}}>OwnerSync</span></div></div>
+      <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:8}}><img src={LOGO_URL} alt="Logo" style={{height:36,objectFit:"contain"}}/></div></div>
       <div style={{padding:24,maxWidth:480}}>
         <div style={S.card}>
           <h2 style={{margin:"0 0 20px",fontSize:18,color:"#f1f5f9"}}>New Owner Statement</h2>
@@ -194,17 +203,11 @@ function StatementBuilder({ token }) {
   return (
     <div style={S.wrap}>
       <div style={S.hdr}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:24,color:"#f59e0b"}}>⌂</span><span style={{fontSize:20,fontWeight:"bold",color:"#f1f5f9"}}>OwnerSync</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><img src={LOGO_URL} alt="Logo" style={{height:36,objectFit:"contain"}}/></div>
         <div style={{display:"flex",gap:8}}>
           <button style={view==="builder"?S.tabA:S.tab} onClick={()=>setView("builder")}>Editor</button>
           <button style={view==="preview"?S.tabA:S.tab} onClick={()=>setView("preview")}>Preview</button>
-          {view==="preview" && <button style={{...S.btnO, background:"#16a34a", color:"#fff", border:"none"}} onClick={()=>{
-  const content = document.getElementById("statement-preview").innerHTML;
-  const w = window.open("","_blank");
-  w.document.write(`<!DOCTYPE html><html><head><title>Statement</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
-  w.document.close();
-  w.print();
-}}>⬇ Download PDF</button>}
+          {view==="preview" && <button style={{...S.btnO, background:"#16a34a", color:"#fff", border:"none"}} onClick={handleDownloadPDF}>⬇ Download PDF</button>}
           <button style={S.btnO} onClick={()=>setStep("select")}>← Back</button>
         </div>
       </div>
@@ -218,12 +221,18 @@ function StatementBuilder({ token }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th><th style={{...S.th,textAlign:"right"}}>PM%</th></tr></thead>
                   <tbody>
-                    {Object.entries(revenueByChannel).map(([ch,amt])=><tr key={ch}><td style={S.td}>{chLabel(ch)}</td><td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td><td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{(PM_RATES[ch]||0.25)*100}%</td></tr>)}
+                    {Object.entries(revenueByChannel).map(([ch,{amt,pmTotal}])=>(
+                      <tr key={ch}>
+                        <td style={S.td}>{ch}</td>
+                        <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
+                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{Math.round((pmTotal/amt)*100)||25}%</td>
+                      </tr>
+                    ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
                   </tbody>
                 </table>}
               <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
-                <label style={S.lbl}>Other (Direct booking, Furnished Finder)</label>
+                <label style={S.lbl}>Other (Direct booking, Furnished Finder) — always 15%</label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <input style={S.inpSm} type="number" value={midtermRevenue} onChange={e=>setMidtermRevenue(e.target.value)} placeholder="0.00"/>
                   <input style={S.inpSm} value={midtermNote} onChange={e=>setMidtermNote(e.target.value)} placeholder="e.g. John Smith"/>
@@ -273,17 +282,26 @@ function StatementBuilder({ token }) {
       ):(
         <div style={{display:"flex",justifyContent:"center",padding:"32px 24px"}}>
           <div id="statement-preview" style={{background:"#fff",color:"#1e293b",borderRadius:8,padding:"40px 48px",width:580,fontFamily:"Georgia,serif",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}}>
+            <div style={{textAlign:"center",marginBottom:24}}>
+              <img src={LOGO_URL} alt="Logo" style={{height:80,objectFit:"contain"}}/>
+            </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:32,borderBottom:"3px solid #1e293b",paddingBottom:16}}>
               <div><div style={{fontSize:22,fontWeight:"bold"}}>Monthly Statement</div><div style={{fontSize:13,color:"#475569",marginTop:4}}>{selectedListing?.name}</div></div>
               <div style={{fontSize:15,color:"#475569",fontStyle:"italic"}}>{MONTHS[selectedMonth]} {selectedYear}</div>
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Revenue</div>
-              {Object.entries(revenueByChannel).map(([ch,amt])=>(
+              {Object.entries(revenueByChannel).map(([ch,{amt}])=>(
                 <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>{chLabel(ch)}</span><span>{fmt(amt)}</span>
+                  <span>{ch}</span><span>{fmt(amt)}</span>
                 </div>
               ))}
+              {midtermAmt > 0 && (
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                  <span>Other (Direct booking, Furnished Finder){midtermNote ? ` — ${midtermNote}` : ""}</span>
+                  <span>{fmt(midtermAmt)}</span>
+                </div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Gross Revenue</span><span>{fmt(grossRevenue)}</span></div>
             </div>
             <div style={{marginBottom:20}}>
@@ -299,10 +317,10 @@ function StatementBuilder({ token }) {
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Expenses</div>
               {expenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{e.category}{e.note?<span style={{color:"#94a3b8",marginLeft:6,fontSize:12}}>{e.note}</span>:null}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
               {extraExpenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{e.category}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
-              {pmByChannel.map(({ch,fee})=>(
-                <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>PM Fee ({(PM_RATES[ch]||0.25)*100}%) {ch==="Midterm"?"Midterm":"Short-term"}</span>
-                  <span>{fmt(fee)}</span>
+              {pmRows.map(({label,pmTotal,rate},i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                  <span>PM Fee ({rate}%) {rate===15?"Midterm":"Short-term"} — {label}</span>
+                  <span>{fmt(pmTotal)}</span>
                 </div>
               ))}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Expenses</span><span>{fmt(totalExpenses)}</span></div>
