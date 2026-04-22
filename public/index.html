@@ -4,6 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OwnerSync</title>
+    <style>
+      @media print {
+        body * { visibility: hidden; }
+        #statement-preview, #statement-preview * { visibility: visible; }
+        #statement-preview {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          padding: 40px;
+          box-sizing: border-box;
+        }
+        @page { 
+          margin: 0;
+          size: A4;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
