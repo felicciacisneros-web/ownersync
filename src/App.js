@@ -19,6 +19,12 @@ const OWNER_PROPERTIES = [
   "Brewers Hill Belle, 2 bed + Loft & balcony",
 ];
 
+const VRBO_ONLY_PROPERTIES = [
+  "Brewers Hill Belle, 3 bed, 3 bath, & balcony",
+  "Brewers Hill Belle • 2 bed, 2 bath, & balcony",
+  "Brewers Hill Belle, 2 bed + Loft & balcony",
+];
+
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -112,6 +118,9 @@ function StatementBuilder({ token }) {
         const arrival = (r.arrivalDate||"").substring(0,10);
         const status = (r.status||"").toLowerCase();
         const key = `${arrival}-${payout}`;
+        const channel = getChannel(r);
+        // For VRBO-only properties, skip Airbnb reservations
+        if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
         if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled") {
           seen.add(key);
           return true;
@@ -124,6 +133,7 @@ function StatementBuilder({ token }) {
   };
 
   const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
+  const isVrboOnly = VRBO_ONLY_PROPERTIES.includes(selectedListing?.name || "");
 
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
@@ -145,9 +155,7 @@ function StatementBuilder({ token }) {
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
   const pmRows = isOwnerProperty ? [] : [
     ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
-      label: ch,
-      amt,
-      pmTotal,
+      label: ch, amt, pmTotal,
       rate: amt > 0 ? Math.round((pmTotal/amt)*100) : 25,
     })),
     ...(midtermAmt > 0 ? [{ label:"Other (Direct booking, Furnished Finder)", amt:midtermAmt, pmTotal:midtermAmt*0.15, rate:15 }] : []),
@@ -234,20 +242,20 @@ function StatementBuilder({ token }) {
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
                         <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
-                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100):25+"%"}</td>
+                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100)+"%":25+"%"}</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
                   </tbody>
                 </table>}
-              {!isOwnerProperty && <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
-                <label style={S.lbl}>Other (Direct booking, Furnished Finder) — always 15%</label>
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
+                <label style={S.lbl}>Other (Direct booking, Furnished Finder){!isOwnerProperty?" — always 15%":""}</label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <input style={S.inpSm} type="number" value={midtermRevenue} onChange={e=>setMidtermRevenue(e.target.value)} placeholder="0.00"/>
                   <input style={S.inpSm} value={midtermNote} onChange={e=>setMidtermNote(e.target.value)} placeholder="e.g. John Smith"/>
                 </div>
-                {midtermAmt > 0 && <p style={{color:"#64748b",fontSize:11,marginTop:6}}>PM Fee (15%): {fmt(midtermAmt*0.15)}</p>}
-              </div>}
+                {midtermAmt > 0 && !isOwnerProperty && <p style={{color:"#64748b",fontSize:11,marginTop:6}}>PM Fee (15%): {fmt(midtermAmt*0.15)}</p>}
+              </div>
             </div>
             <div style={S.card}>
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Platform Fees</h3>
@@ -305,7 +313,7 @@ function StatementBuilder({ token }) {
                   <span>{ch}</span><span>{fmt(amt)}</span>
                 </div>
               ))}
-              {midtermAmt > 0 && !isOwnerProperty && (
+              {midtermAmt > 0 && (
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
                   <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
                   <span>{fmt(midtermAmt)}</span>
