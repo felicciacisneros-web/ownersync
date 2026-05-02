@@ -14,6 +14,9 @@ const OWNER_PROPERTIES = [
   "Beautiful Victorian, Amazing View!",
   "Amazing view, Modern Space",
   "Renovated Gem Minutes From American Family Field",
+  "Brewers Hill Belle, 3 bed, 3 bath, & balcony",
+  "Brewers Hill Belle • 2 bed, 2 bath, & balcony",
+  "Brewers Hill Belle, 2 bed + Loft & balcony",
 ];
 
 function AuthScreen({ onAuth }) {
