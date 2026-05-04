@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 
 const EXPENSE_CATEGORIES = [
-  "Hot tub chemicals/Supplies/Care","Cleaning","Replacement Items",
+  "VRBO Booking Fee","Hot tub chemicals/Supplies/Care","Cleaning","Replacement Items",
   "Spring cleanup/reorganization","Lawn Care/Snow Removal",
   "Non-Covered Disposables","Handyman","Pest Control","Maintenance","HVAC",
-  "VRBO Booking Fee",
 ];
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
