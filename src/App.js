@@ -330,8 +330,7 @@ function StatementBuilder({ token }) {
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Expenses</div>
-              {expenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{e.category}{e.note?<span style={{color:"#94a3b8",marginLeft:6,fontSize:12}}>{e.note}</span>:null}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
-              {extraExpenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{e.category}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
+              {expenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{e.category}{e.note?` — ${e.note}`:""}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
               {pmRows.map(({label,pmTotal,rate},i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
                   <span>PM Fee ({rate}%) {rate===15?"Midterm":"Short-term"} — {label}</span>
