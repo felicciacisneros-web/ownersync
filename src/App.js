@@ -4,6 +4,7 @@ const EXPENSE_CATEGORIES = [
   "Hot tub chemicals/Supplies/Care","Cleaning","Replacement Items",
   "Spring cleanup/reorganization","Lawn Care/Snow Removal",
   "Non-Covered Disposables","Handyman","Pest Control","Maintenance","HVAC",
+  "VRBO Booking Fee",
 ];
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
@@ -84,7 +85,7 @@ function StatementBuilder({ token }) {
   const [error, setError] = useState("");
   const [midtermRevenue, setMidtermRevenue] = useState("");
   const [midtermNote, setMidtermNote] = useState("");
-  const [platformFees, setPlatformFees] = useState({ airbnbHostFee:"", vrboFee:"", stripeFee:"", airbnbTax:"" });
+  const [platformFees, setPlatformFees] = useState({ airbnbHostFee:"", stripeFee:"", airbnbTax:"" });
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
@@ -119,7 +120,6 @@ function StatementBuilder({ token }) {
         const status = (r.status||"").toLowerCase();
         const key = `${arrival}-${payout}`;
         const channel = getChannel(r);
-        // For VRBO-only properties, skip Airbnb reservations
         if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
         if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled") {
           seen.add(key);
@@ -133,7 +133,6 @@ function StatementBuilder({ token }) {
   };
 
   const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
-  const isVrboOnly = VRBO_ONLY_PROPERTIES.includes(selectedListing?.name || "");
 
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
@@ -149,9 +148,10 @@ function StatementBuilder({ token }) {
 
   const midtermAmt = parseFloat(midtermRevenue)||0;
   const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v.amt,0) + midtermAmt;
-  const af=parseFloat(platformFees.airbnbHostFee)||0, at=parseFloat(platformFees.airbnbTax)||0;
-  const vf=parseFloat(platformFees.vrboFee)||0, sf=parseFloat(platformFees.stripeFee)||0;
-  const totalPlatformFees=af+at+vf+sf;
+  const af=parseFloat(platformFees.airbnbHostFee)||0;
+  const at=parseFloat(platformFees.airbnbTax)||0;
+  const sf=parseFloat(platformFees.stripeFee)||0;
+  const totalPlatformFees=af+at+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
   const pmRows = isOwnerProperty ? [] : [
     ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
@@ -242,7 +242,7 @@ function StatementBuilder({ token }) {
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
                         <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
-                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100)+"%":25+"%"}</td>
+                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100)+"%":"25%"}</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
@@ -260,7 +260,7 @@ function StatementBuilder({ token }) {
             <div style={S.card}>
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Platform Fees</h3>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {[["airbnbHostFee","Airbnb Host Fee"],["airbnbTax","Airbnb Occupancy Tax"],["vrboFee","VRBO Fee"],["stripeFee","Stripe Fee"]].map(([k,l])=>(
+                {[["airbnbHostFee","Airbnb Host Fee"],["airbnbTax","Airbnb Occupancy Tax"],["stripeFee","Stripe Fee"]].map(([k,l])=>(
                   <div key={k}><label style={S.lbl}>{l}</label><input style={S.inpSm} type="number" value={platformFees[k]} onChange={e=>setPlatformFees(p=>({...p,[k]:e.target.value}))} placeholder="0.00"/></div>
                 ))}
               </div>
@@ -325,7 +325,6 @@ function StatementBuilder({ token }) {
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Fees</div>
               {af>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Airbnb Host Fee</span><span>{fmt(af)}</span></div>}
               {at>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Airbnb Occupancy Tax</span><span>{fmt(at)}</span></div>}
-              {vf>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>VRBO Booking Fee</span><span>{fmt(vf)}</span></div>}
               {sf>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Stripe Booking Fee</span><span>{fmt(sf)}</span></div>}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Platform Fees</span><span>{fmt(totalPlatformFees)}</span></div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px",background:"#1e293b",color:"#f1f5f9",marginTop:4}}><span>Total Revenue Received</span><span>{fmt(totalRevenueReceived)}</span></div>
