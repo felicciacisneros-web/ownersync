@@ -171,7 +171,7 @@ function StatementBuilder({ token }) {
     const w = window.open("","_blank");
     w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
     w.document.close();
-    setTimeout(()=>w.print(), 500);
+    setTimeout(()=>w.print(), 1000);
   };
 
   const S={
