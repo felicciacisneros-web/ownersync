@@ -243,6 +243,40 @@ function StatementBuilder({ token }) {
                 </div>
               </div>
             </div>
+
+            {/* DEBUG PANEL - only visible in editor */}
+            <div style={{...S.card, borderColor:"#475569"}}>
+              <h3 style={{margin:"0 0 12px",fontSize:12,color:"#64748b",textTransform:"uppercase"}}>🔍 Reservations loaded (debug)</h3>
+              {reservations.length===0?<p style={{color:"#64748b",fontSize:12}}>No reservations.</p>:
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                  <thead><tr>
+                    <th style={S.th}>Guest</th>
+                    <th style={S.th}>Channel</th>
+                    <th style={S.th}>Arrival</th>
+                    <th style={S.th}>Nights</th>
+                    <th style={{...S.th,textAlign:"right"}}>Amount</th>
+                  </tr></thead>
+                  <tbody>
+                    {reservations.map((r,i)=>{
+                      const ch = getChannel(r);
+                      const amt = ch==="Airbnb"
+                        ? parseFloat(r.airbnbExpectedPayoutAmount||0)+parseFloat(r.airbnbListingHostFee||0)
+                        : parseFloat(r.totalPrice||0);
+                      return (
+                        <tr key={i}>
+                          <td style={S.td}>{r.guestName||r.guest||"—"}</td>
+                          <td style={S.td}>{r.channelName||"—"}</td>
+                          <td style={S.td}>{(r.arrivalDate||"").substring(0,10)}</td>
+                          <td style={S.td}>{r.nights||"—"}</td>
+                          <td style={{...S.td,textAlign:"right"}}>${amt.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              }
+            </div>
+
             <div style={S.card}>
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Platform Fees</h3>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -253,6 +287,7 @@ function StatementBuilder({ token }) {
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,color:"#94a3b8",marginTop:8}}><span>Total Platform Fees</span><span style={{color:"#f87171"}}>-{fmt(totalPlatformFees)}</span></div>
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}><strong>Total Revenue Received</strong><strong>{fmt(totalRevenueReceived)}</strong></div>
             </div>
+
             {!isOwnerProperty && <div style={S.card}>
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>PM Fee</h3>
               <div style={{marginBottom:12}}>
