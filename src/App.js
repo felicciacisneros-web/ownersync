@@ -68,11 +68,6 @@ function getChannel(r) {
   return "Direct";
 }
 
-function getPMRate(r) {
-  const nights = parseFloat(r.nights || 0);
-  return nights >= 30 ? 0.15 : 0.25;
-}
-
 function StatementBuilder({ token }) {
   const [step, setStep] = useState("select");
   const [listings, setListings] = useState([]);
@@ -88,6 +83,7 @@ function StatementBuilder({ token }) {
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
+  const [pmRate, setPmRate] = useState("0.25");
 
   useEffect(() => {
     (async () => {
@@ -138,28 +134,21 @@ function StatementBuilder({ token }) {
     const amt = channel === "Airbnb"
       ? parseFloat(r.airbnbExpectedPayoutAmount||0) + parseFloat(r.airbnbListingHostFee||0)
       : parseFloat(r.totalPrice||0);
-    const rate = isOwnerProperty ? 0 : getPMRate(r);
-    if (!acc[channel]) acc[channel] = { amt: 0, pmTotal: 0 };
-    acc[channel].amt += amt;
-    acc[channel].pmTotal += amt * rate;
+    if (!acc[channel]) acc[channel] = 0;
+    acc[channel] += amt;
     return acc;
   }, {});
 
   const midtermAmt = parseFloat(midtermRevenue)||0;
-  const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v.amt,0) + midtermAmt;
+  const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v,0) + midtermAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0;
   const at=parseFloat(platformFees.airbnbTax)||0;
   const sf=parseFloat(platformFees.stripeFee)||0;
   const totalPlatformFees=af+at+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
-  const pmRows = isOwnerProperty ? [] : [
-    ...Object.entries(revenueByChannel).map(([ch, {amt, pmTotal}]) => ({
-      label: ch, amt, pmTotal,
-      rate: amt > 0 ? Math.round((pmTotal/amt)*100) : 25,
-    })),
-    ...(midtermAmt > 0 ? [{ label:"Other (Direct booking, Furnished Finder)", amt:midtermAmt, pmTotal:midtermAmt*0.15, rate:15 }] : []),
-  ];
-  const pmFee = pmRows.reduce((s,r)=>s+r.pmTotal, 0);
+  const selectedRate = parseFloat(pmRate)||0;
+  const pmFee = isOwnerProperty ? 0 : totalRevenueReceived * selectedRate;
+  const pmLabel = pmRate==="0.25" ? "Short-term (25%)" : pmRate==="0.15" ? "Midterm (15%)" : "No PM Fee";
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
   const netRevenue=totalRevenueReceived-totalExpenses;
@@ -235,25 +224,23 @@ function StatementBuilder({ token }) {
               {isOwnerProperty && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
               {Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th><th style={{...S.th,textAlign:"right"}}>PM%</th></tr></thead>
+                  <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th></tr></thead>
                   <tbody>
-                    {Object.entries(revenueByChannel).map(([ch,{amt,pmTotal}])=>(
+                    {Object.entries(revenueByChannel).map(([ch,amt])=>(
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
                         <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
-                        <td style={{...S.td,textAlign:"right",color:"#94a3b8"}}>{isOwnerProperty?"—":amt>0?Math.round((pmTotal/amt)*100)+"%":"25%"}</td>
                       </tr>
                     ))}
-                    <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td><td style={S.td}></td></tr>
+                    <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td></tr>
                   </tbody>
                 </table>}
               <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
-                <label style={S.lbl}>Other (Direct booking, Furnished Finder){!isOwnerProperty?" — always 15%":""}</label>
+                <label style={S.lbl}>Other (Direct booking, Furnished Finder)</label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <input style={S.inpSm} type="number" value={midtermRevenue} onChange={e=>setMidtermRevenue(e.target.value)} placeholder="0.00"/>
                   <input style={S.inpSm} value={midtermNote} onChange={e=>setMidtermNote(e.target.value)} placeholder="e.g. John Smith"/>
                 </div>
-                {midtermAmt > 0 && !isOwnerProperty && <p style={{color:"#64748b",fontSize:11,marginTop:6}}>PM Fee (15%): {fmt(midtermAmt*0.15)}</p>}
               </div>
             </div>
             <div style={S.card}>
@@ -266,6 +253,22 @@ function StatementBuilder({ token }) {
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,color:"#94a3b8",marginTop:8}}><span>Total Platform Fees</span><span style={{color:"#f87171"}}>-{fmt(totalPlatformFees)}</span></div>
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}><strong>Total Revenue Received</strong><strong>{fmt(totalRevenueReceived)}</strong></div>
             </div>
+            {!isOwnerProperty && <div style={S.card}>
+              <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>PM Fee</h3>
+              <div style={{marginBottom:12}}>
+                <label style={S.lbl}>Rate</label>
+                <select style={S.sel} value={pmRate} onChange={e=>setPmRate(e.target.value)}>
+                  <option value="0.25">25% — Short-term</option>
+                  <option value="0.15">15% — Midterm</option>
+                  <option value="0">0% — No PM Fee</option>
+                </select>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}>
+                <span>PM Fee ({pmLabel})</span>
+                <span style={{color:"#f87171"}}>-{fmt(pmFee)}</span>
+              </div>
+              <p style={{color:"#64748b",fontSize:11,marginTop:8}}>Applied on Total Revenue Received: {fmt(totalRevenueReceived)}</p>
+            </div>}
           </div>
           <div>
             <div style={S.card}>
@@ -287,7 +290,6 @@ function StatementBuilder({ token }) {
                       <td style={S.td}><div style={{display:"flex",gap:4}}><input style={{...S.inpInline,width:60}} value={exp.note} onChange={e=>setExtraExpenses(prev=>prev.map((x,idx)=>idx===i?{...x,note:e.target.value}:x))} placeholder="—"/><button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:12}} onClick={()=>setExtraExpenses(prev=>prev.filter((_,idx)=>idx!==i))}>✕</button></div></td>
                     </tr>
                   ))}
-                  {!isOwnerProperty && <tr style={{background:"#0f172a"}}><td style={S.td}><strong>PM Fee</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(pmFee)}</strong></td><td style={S.td}><span style={{background:"#1e3a5f",color:"#60a5fa",fontSize:10,padding:"2px 6px",borderRadius:4}}>Auto</span></td></tr>}
                 </tbody>
               </table>
               <button style={S.btnG} onClick={()=>setExtraExpenses(prev=>[...prev,{category:"",amount:"",note:""}])}>+ Add expense</button>
@@ -307,7 +309,7 @@ function StatementBuilder({ token }) {
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Revenue</div>
-              {Object.entries(revenueByChannel).map(([ch,{amt}])=>(
+              {Object.entries(revenueByChannel).map(([ch,amt])=>(
                 <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
                   <span>{ch}</span><span>{fmt(amt)}</span>
                 </div>
@@ -330,14 +332,24 @@ function StatementBuilder({ token }) {
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Expenses</div>
-              {expenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{String(e.category)}{e.note ? " — " + String(e.note) : ""}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
-{extraExpenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>{String(e.category)}{e.note ? " — " + String(e.note) : ""}</span><span>{fmt(parseFloat(e.amount))}</span></div>)}
-              {pmRows.map(({label,pmTotal,rate},i)=>(
+              {expenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>PM Fee ({rate}%) {rate===15?"Midterm":"Short-term"} — {label}</span>
-                  <span>{fmt(pmTotal)}</span>
+                  <span>{e.category}{e.note ? " — " + e.note : ""}</span>
+                  <span>{fmt(parseFloat(e.amount))}</span>
                 </div>
               ))}
+              {extraExpenses.filter(e=>parseFloat(e.amount)>0).map((e,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                  <span>{e.category}{e.note ? " — " + e.note : ""}</span>
+                  <span>{fmt(parseFloat(e.amount))}</span>
+                </div>
+              ))}
+              {!isOwnerProperty && pmFee > 0 && (
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                  <span>PM Fee — {pmLabel}</span>
+                  <span>{fmt(pmFee)}</span>
+                </div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Expenses</span><span>{fmt(totalExpenses)}</span></div>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:"bold",padding:"16px 0",borderTop:"3px double #475569",color:netRevenue<0?"#dc2626":"#16a34a"}}><span>Net Revenue</span><span>{fmtS(netRevenue)}</span></div>
