@@ -25,6 +25,14 @@ const VRBO_ONLY_PROPERTIES = [
   "Brewers Hill Belle, 2 bed + Loft & balcony",
 ];
 
+const LLOYD_UNITS = [
+  { id: 122377, label: "Lloyd - Unit 1" },
+  { id: 444967, label: "Lloyd - Unit 2" },
+  { id: 444970, label: "Lloyd - Unit 3" },
+];
+
+const LLOYD_GROUP = { id: "lloyd-group", name: "Brewers Hill Belle", internalListingName: "Lloyd (All Units)", isGroup: true };
+
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -75,6 +83,7 @@ function StatementBuilder({ token }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reservations, setReservations] = useState([]);
+  const [lloydReservations, setLloydReservations] = useState([]); // {unit, channel, amt, guest, arrival, nights}
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [midtermRevenue, setMidtermRevenue] = useState("");
@@ -94,7 +103,11 @@ function StatementBuilder({ token }) {
         const res = await fetch(`${PROXY}/v1/listings?limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message||"Error loading properties");
-        setListings((data.result||[]).sort((a,b) => (a.internalListingName||a.name).localeCompare(b.internalListingName||b.name)));
+        const sorted = (data.result||[]).sort((a,b) => (a.internalListingName||a.name).localeCompare(b.internalListingName||b.name));
+        // Filter out individual Lloyd units from dropdown, add group instead
+        const lloydIds = LLOYD_UNITS.map(u=>u.id);
+        const filtered = sorted.filter(l => !lloydIds.includes(l.id));
+        setListings([LLOYD_GROUP, ...filtered]);
       } catch(e){ setError(e.message); } finally { setLoading(false); }
     })();
   }, [token]);
@@ -106,6 +119,33 @@ function StatementBuilder({ token }) {
       const m = selectedMonth+1;
       const start = `${selectedYear}-${String(m).padStart(2,"0")}-01`;
       const end = `${selectedYear}-${String(m).padStart(2,"0")}-${new Date(selectedYear,m,0).getDate()}`;
+
+      if (selectedListing.isGroup) {
+        // Fetch all 3 Lloyd units
+        const allUnitRes = await Promise.all(LLOYD_UNITS.map(unit =>
+          fetch(`${PROXY}/v1/reservations?listingId=${unit.id}&startDate=${start}&endDate=${end}&limit=100`, { headers:{ Authorization:`Bearer ${token}` } })
+            .then(r=>r.json())
+            .then(data => (data.result||[]).map(r => ({ ...r, _unitLabel: unit.label })))
+        ));
+        const all = allUnitRes.flat();
+        const seen = new Set();
+        const results = all.filter(r => {
+          const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
+          const arrival = (r.arrivalDate||"").substring(0,10);
+          const status = (r.status||"").toLowerCase();
+          const key = `${r._unitLabel}-${arrival}-${payout}`;
+          if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired") {
+            seen.add(key);
+            return true;
+          }
+          return false;
+        });
+        setLloydReservations(results.sort((a,b) => (a.arrivalDate||"").localeCompare(b.arrivalDate||"")));
+        setReservations([]);
+        setStep("build");
+        return;
+      }
+
       const res = await fetch(`${PROXY}/v1/reservations?listingId=${selectedListing.id}&startDate=${start}&endDate=${end}&limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.message||"Error loading reservations");
@@ -124,15 +164,16 @@ function StatementBuilder({ token }) {
         }
         return false;
       });
+      setLloydReservations([]);
       setReservations(results.sort((a,b) => (a.arrivalDate||"").localeCompare(b.arrivalDate||"")));
       setStep("build");
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
 
-  const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
-  // Use external name for statement, internal name for dropdown
-  const statementName = selectedListing?.name || "";
+  const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "") || selectedListing?.isGroup;
+  const statementName = selectedListing?.isGroup ? "Brewers Hill Belle" : (selectedListing?.name || "");
 
+  // Regular revenue by channel
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
     const amt = channel === "Airbnb"
@@ -143,9 +184,20 @@ function StatementBuilder({ token }) {
     return acc;
   }, {});
 
+  // Lloyd revenue by unit+channel
+  const lloydRevenueRows = lloydReservations.map(r => ({
+    unit: r._unitLabel,
+    channel: getChannel(r),
+    amt: parseFloat(r.totalPrice||0),
+    guest: r.guestName||"—",
+    arrival: (r.arrivalDate||"").substring(0,10),
+    nights: r.nights||"—",
+  }));
+  const lloydTotal = lloydRevenueRows.reduce((s,r)=>s+r.amt,0);
+
   const midtermAmt = parseFloat(midtermRevenue)||0;
   const creditAmt = parseFloat(creditAmount)||0;
-  const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v,0) + midtermAmt;
+  const grossRevenue = (selectedListing?.isGroup ? lloydTotal : Object.values(revenueByChannel).reduce((s,v)=>s+v,0)) + midtermAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0;
   const at=parseFloat(platformFees.airbnbTax)||0;
   const sf=parseFloat(platformFees.stripeFee)||0;
@@ -194,7 +246,10 @@ function StatementBuilder({ token }) {
           {error&&<p style={{color:"#f87171",fontSize:13}}>{error}</p>}
           {loading&&<p style={{color:"#64748b",fontSize:13}}>Loading properties...</p>}
           <div style={{marginBottom:16}}><label style={S.lbl}>Property</label>
-            <select style={S.sel} value={selectedListing?.id||""} onChange={e=>setSelectedListing(listings.find(x=>String(x.id)===e.target.value)||null)}>
+            <select style={S.sel} value={selectedListing?.id||""} onChange={e=>{
+              if (e.target.value==="lloyd-group") setSelectedListing(LLOYD_GROUP);
+              else setSelectedListing(listings.find(x=>String(x.id)===e.target.value)||null);
+            }}>
               <option value="">Select a property...</option>
               {listings.map(l=><option key={l.id} value={l.id}>{l.internalListingName || l.name}</option>)}
             </select>
@@ -227,8 +282,24 @@ function StatementBuilder({ token }) {
               <h3 style={{margin:"0 0 4px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Revenue</h3>
               <p style={{color:"#64748b",fontSize:12,margin:"0 0 4px"}}>{selectedListing?.internalListingName||selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
               <p style={{color:"#475569",fontSize:11,margin:"0 0 16px",fontStyle:"italic"}}>{statementName}</p>
-              {isOwnerProperty && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
-              {Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
+              {isOwnerProperty && !selectedListing?.isGroup && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
+
+              {selectedListing?.isGroup ? (
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead><tr><th style={S.th}>Unit</th><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Amount</th></tr></thead>
+                  <tbody>
+                    {lloydRevenueRows.map((r,i)=>(
+                      <tr key={i}>
+                        <td style={S.td}>{r.unit}</td>
+                        <td style={S.td}>{r.channel}</td>
+                        <td style={{...S.td,textAlign:"right"}}>{fmt(r.amt)}</td>
+                      </tr>
+                    ))}
+                    <tr style={{background:"#0f172a"}}><td style={S.td} colSpan={2}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(lloydTotal)}</strong></td></tr>
+                  </tbody>
+                </table>
+              ) : (
+                Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th></tr></thead>
                   <tbody>
@@ -240,7 +311,9 @@ function StatementBuilder({ token }) {
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td></tr>
                   </tbody>
-                </table>}
+                </table>
+              )}
+
               <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
                 <label style={S.lbl}>Other (Direct booking, Furnished Finder)</label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -253,17 +326,18 @@ function StatementBuilder({ token }) {
             {/* DEBUG PANEL */}
             <div style={{...S.card, borderColor:"#475569"}}>
               <h3 style={{margin:"0 0 12px",fontSize:12,color:"#64748b",textTransform:"uppercase"}}>🔍 Reservations loaded (debug)</h3>
-              {reservations.length===0?<p style={{color:"#64748b",fontSize:12}}>No reservations.</p>:
+              {(selectedListing?.isGroup ? lloydReservations : reservations).length===0?<p style={{color:"#64748b",fontSize:12}}>No reservations.</p>:
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                   <thead><tr>
                     <th style={S.th}>Guest</th>
+                    {selectedListing?.isGroup && <th style={S.th}>Unit</th>}
                     <th style={S.th}>Channel</th>
                     <th style={S.th}>Arrival</th>
                     <th style={S.th}>Nights</th>
                     <th style={{...S.th,textAlign:"right"}}>Amount</th>
                   </tr></thead>
                   <tbody>
-                    {reservations.map((r,i)=>{
+                    {(selectedListing?.isGroup ? lloydReservations : reservations).map((r,i)=>{
                       const ch = getChannel(r);
                       const amt = ch==="Airbnb"
                         ? parseFloat(r.airbnbExpectedPayoutAmount||0)+parseFloat(r.airbnbListingHostFee||0)
@@ -271,6 +345,7 @@ function StatementBuilder({ token }) {
                       return (
                         <tr key={i}>
                           <td style={S.td}>{r.guestName||r.guest||"—"}</td>
+                          {selectedListing?.isGroup && <td style={S.td}>{r._unitLabel||"—"}</td>}
                           <td style={S.td}>{r.channelName||"—"}</td>
                           <td style={S.td}>{(r.arrivalDate||"").substring(0,10)}</td>
                           <td style={S.td}>{r.nights||"—"}</td>
@@ -359,18 +434,37 @@ function StatementBuilder({ token }) {
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Revenue</div>
-              {Object.entries(revenueByChannel).map(([ch,amt])=>(
-                <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>{ch}</span><span>{fmt(amt)}</span>
-                </div>
-              ))}
-              {midtermAmt > 0 && (
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                  <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
-                  <span>{fmt(midtermAmt)}</span>
-                </div>
+              {selectedListing?.isGroup ? (
+                <>
+                  {lloydRevenueRows.map((r,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                      <span>{r.unit} — {r.channel}</span><span>{fmt(r.amt)}</span>
+                    </div>
+                  ))}
+                  {midtermAmt > 0 && (
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                      <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
+                      <span>{fmt(midtermAmt)}</span>
+                    </div>
+                  )}
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Gross Revenue</span><span>{fmt(grossRevenue)}</span></div>
+                </>
+              ) : (
+                <>
+                  {Object.entries(revenueByChannel).map(([ch,amt])=>(
+                    <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                      <span>{ch}</span><span>{fmt(amt)}</span>
+                    </div>
+                  ))}
+                  {midtermAmt > 0 && (
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
+                      <span>Other (Direct booking, Furnished Finder){midtermNote?` — ${midtermNote}`:""}</span>
+                      <span>{fmt(midtermAmt)}</span>
+                    </div>
+                  )}
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Gross Revenue</span><span>{fmt(grossRevenue)}</span></div>
+                </>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Gross Revenue</span><span>{fmt(grossRevenue)}</span></div>
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Fees</div>
