@@ -84,6 +84,8 @@ function StatementBuilder({ token }) {
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
   const [pmRate, setPmRate] = useState("0.25");
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditNote, setCreditNote] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -113,21 +115,23 @@ function StatementBuilder({ token }) {
         const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
         const arrival = (r.arrivalDate||"").substring(0,10);
         const status = (r.status||"").toLowerCase();
-const key = `${arrival}-${payout}`;
-const channel = getChannel(r);
-if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
-if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired") {
+        const key = `${arrival}-${payout}`;
+        const channel = getChannel(r);
+        if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
+        if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired") {
           seen.add(key);
           return true;
         }
         return false;
       });
-     setReservations(results.sort((a,b) => (a.arrivalDate||"").localeCompare(b.arrivalDate||"")));
+      setReservations(results.sort((a,b) => (a.arrivalDate||"").localeCompare(b.arrivalDate||"")));
       setStep("build");
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
 
   const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
+  // Use external name for statement, internal name for dropdown
+  const statementName = selectedListing?.externalName || selectedListing?.name || "";
 
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
@@ -140,6 +144,7 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
   }, {});
 
   const midtermAmt = parseFloat(midtermRevenue)||0;
+  const creditAmt = parseFloat(creditAmount)||0;
   const grossRevenue = Object.values(revenueByChannel).reduce((s,v)=>s+v,0) + midtermAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0;
   const at=parseFloat(platformFees.airbnbTax)||0;
@@ -151,14 +156,14 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
   const pmLabel = pmRate==="0.25" ? "Short-term (25%)" : pmRate==="0.15" ? "Midterm (15%)" : "No PM Fee";
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
-  const netRevenue=totalRevenueReceived-totalExpenses;
+  const netRevenue=totalRevenueReceived-totalExpenses+creditAmt;
   const fmt=n=>"$"+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
   const fmtS=n=>(n<0?"-":"")+"$"+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 
   const handleDownloadPDF = () => {
     const content = document.getElementById("statement-preview").innerHTML;
     const w = window.open("","_blank");
-    w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${selectedListing?.name} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>Statement - ${statementName} - ${MONTHS[selectedMonth]} ${selectedYear}</title><style>body{font-family:Georgia,serif;padding:40px;max-width:650px;margin:0 auto;color:#1e293b;}@media print{@page{margin:1cm;}}</style></head><body>${content}</body></html>`);
     w.document.close();
     setTimeout(()=>w.print(), 1000);
   };
@@ -191,7 +196,7 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
           <div style={{marginBottom:16}}><label style={S.lbl}>Property</label>
             <select style={S.sel} value={selectedListing?.id||""} onChange={e=>setSelectedListing(listings.find(x=>String(x.id)===e.target.value)||null)}>
               <option value="">Select a property...</option>
-              {listings.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+              {listings.map(l=><option key={l.id} value={l.id}>{l.internalName || l.name}</option>)}
             </select>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
@@ -220,7 +225,8 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
           <div>
             <div style={S.card}>
               <h3 style={{margin:"0 0 4px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Revenue</h3>
-              <p style={{color:"#64748b",fontSize:12,margin:"0 0 16px"}}>{selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
+              <p style={{color:"#64748b",fontSize:12,margin:"0 0 4px"}}>{selectedListing?.internalName||selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
+              <p style={{color:"#475569",fontSize:11,margin:"0 0 16px",fontStyle:"italic"}}>{statementName}</p>
               {isOwnerProperty && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
               {Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -244,7 +250,7 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
               </div>
             </div>
 
-            {/* DEBUG PANEL - only visible in editor */}
+            {/* DEBUG PANEL */}
             <div style={{...S.card, borderColor:"#475569"}}>
               <h3 style={{margin:"0 0 12px",fontSize:12,color:"#64748b",textTransform:"uppercase"}}>🔍 Reservations loaded (debug)</h3>
               {reservations.length===0?<p style={{color:"#64748b",fontSize:12}}>No reservations.</p>:
@@ -304,6 +310,15 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
               </div>
               <p style={{color:"#64748b",fontSize:11,marginTop:8}}>Applied on Total Revenue Received: {fmt(totalRevenueReceived)}</p>
             </div>}
+
+            <div style={S.card}>
+              <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Credit</h3>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <input style={S.inpSm} type="number" value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} placeholder="0.00"/>
+                <input style={S.inpSm} value={creditNote} onChange={e=>setCreditNote(e.target.value)} placeholder="e.g. Damage deposit refund"/>
+              </div>
+              {creditAmt > 0 && <p style={{color:"#16a34a",fontSize:11,marginTop:8}}>+{fmt(creditAmt)} added to Net Revenue</p>}
+            </div>
           </div>
           <div>
             <div style={S.card}>
@@ -339,7 +354,7 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
               <img src={LOGO_URL} alt="Logo" style={{height:60,objectFit:"contain"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:32,borderBottom:"3px solid #1e293b",paddingBottom:16}}>
-              <div><div style={{fontSize:22,fontWeight:"bold"}}>Monthly Statement</div><div style={{fontSize:13,color:"#475569",marginTop:4}}>{selectedListing?.name}</div></div>
+              <div><div style={{fontSize:22,fontWeight:"bold"}}>Monthly Statement</div><div style={{fontSize:13,color:"#475569",marginTop:4}}>{statementName}</div></div>
               <div style={{fontSize:15,color:"#475569",fontStyle:"italic"}}>{MONTHS[selectedMonth]} {selectedYear}</div>
             </div>
             <div style={{marginBottom:20}}>
@@ -387,6 +402,12 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
               )}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Expenses</span><span>{fmt(totalExpenses)}</span></div>
             </div>
+            {creditAmt > 0 && (
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"8px 0",borderBottom:"1px dotted #475569",color:"#16a34a"}}>
+                <span>Credit{creditNote ? " — " + creditNote : ""}</span>
+                <span>+{fmt(creditAmt)}</span>
+              </div>
+            )}
             <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:"bold",padding:"16px 0",borderTop:"3px double #475569",color:netRevenue<0?"#dc2626":"#16a34a"}}><span>Net Revenue</span><span>{fmtS(netRevenue)}</span></div>
           </div>
         </div>
