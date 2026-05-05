@@ -122,7 +122,7 @@ if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status
         }
         return false;
       });
-      setReservations(results);
+     setReservations(results.sort((a,b) => (a.arrivalDate||"").localeCompare(b.arrivalDate||"")));
       setStep("build");
     } catch(e){ setError(e.message); } finally { setLoading(false); }
   };
