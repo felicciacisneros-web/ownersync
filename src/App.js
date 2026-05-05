@@ -130,11 +130,13 @@ function StatementBuilder({ token }) {
         const all = allUnitRes.flat();
         const seen = new Set();
         const results = all.filter(r => {
-          const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
-          const arrival = (r.arrivalDate||"").substring(0,10);
-          const status = (r.status||"").toLowerCase();
-          const key = `${r._unitLabel}-${arrival}-${payout}`;
-          if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired") {
+  const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
+  const arrival = (r.arrivalDate||"").substring(0,10);
+  const status = (r.status||"").toLowerCase();
+  const key = `${r._unitLabel}-${arrival}-${payout}`;
+  const channel = getChannel(r);
+  if (channel === "Airbnb") return false;
+  if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired") {
             seen.add(key);
             return true;
           }
