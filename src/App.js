@@ -113,10 +113,10 @@ function StatementBuilder({ token }) {
         const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
         const arrival = (r.arrivalDate||"").substring(0,10);
         const status = (r.status||"").toLowerCase();
-        const key = `${arrival}-${payout}`;
-        const channel = getChannel(r);
-        if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
-        if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled") {
+const key = `${arrival}-${payout}`;
+const channel = getChannel(r);
+if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
+if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request") {
           seen.add(key);
           return true;
         }
