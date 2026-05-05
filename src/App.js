@@ -116,7 +116,7 @@ function StatementBuilder({ token }) {
 const key = `${arrival}-${payout}`;
 const channel = getChannel(r);
 if (VRBO_ONLY_PROPERTIES.includes(selectedListing?.name||"") && channel === "Airbnb") return false;
-if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request") {
+if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && sstatus !== "inquiry" && status !== "request" && status !== "expired") {
           seen.add(key);
           return true;
         }
