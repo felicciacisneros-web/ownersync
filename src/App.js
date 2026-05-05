@@ -131,7 +131,7 @@ function StatementBuilder({ token }) {
 
   const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "");
   // Use external name for statement, internal name for dropdown
-  const statementName = selectedListing?.externalName || selectedListing?.name || "";
+  const statementName = selectedListing?.name || "";
 
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
@@ -196,7 +196,7 @@ function StatementBuilder({ token }) {
           <div style={{marginBottom:16}}><label style={S.lbl}>Property</label>
             <select style={S.sel} value={selectedListing?.id||""} onChange={e=>setSelectedListing(listings.find(x=>String(x.id)===e.target.value)||null)}>
               <option value="">Select a property...</option>
-              {listings.map(l=><option key={l.id} value={l.id}>{l.internalName || l.name}</option>)}
+              {listings.map(l=><option key={l.id} value={l.id}>{l.internalListingName || l.name}</option>)}
             </select>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
@@ -225,7 +225,7 @@ function StatementBuilder({ token }) {
           <div>
             <div style={S.card}>
               <h3 style={{margin:"0 0 4px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>Revenue</h3>
-              <p style={{color:"#64748b",fontSize:12,margin:"0 0 4px"}}>{selectedListing?.internalName||selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
+              <p style={{color:"#64748b",fontSize:12,margin:"0 0 4px"}}>{selectedListing?.internalListingName||selectedListing?.name} · {MONTHS[selectedMonth]} {selectedYear}</p>
               <p style={{color:"#475569",fontSize:11,margin:"0 0 16px",fontStyle:"italic"}}>{statementName}</p>
               {isOwnerProperty && <p style={{color:"#f59e0b",fontSize:12,marginBottom:12}}>⚠️ Owner property — no PM fee applied</p>}
               {Object.keys(revenueByChannel).length===0?<p style={{color:"#64748b",fontSize:13}}>No reservations found.</p>:
