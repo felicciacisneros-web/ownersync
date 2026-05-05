@@ -94,7 +94,7 @@ function StatementBuilder({ token }) {
         const res = await fetch(`${PROXY}/v1/listings?limit=100`, { headers:{ Authorization:`Bearer ${token}` } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message||"Error loading properties");
-        setListings(data.result||[]);
+        setListings((data.result||[]).sort((a,b) => (a.internalListingName||a.name).localeCompare(b.internalListingName||b.name)));
       } catch(e){ setError(e.message); } finally { setLoading(false); }
     })();
   }, [token]);
