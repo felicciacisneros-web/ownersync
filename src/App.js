@@ -207,7 +207,7 @@ function StatementBuilder({ token }) {
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
   const selectedRate = parseFloat(pmRate)||0;
   const pmFee = isOwnerProperty ? 0 : totalRevenueReceived * selectedRate;
-  const pmLabel = pmRate==="0.25" ? "Short-term (25%)" : pmRate==="0.15" ? "Midterm (15%)" : "No PM Fee";
+  const pmLabel = pmRate==="0.25" ? "Short-term (25%)" : pmRate==="0.20" ? "Short-term (20%)" : pmRate==="0.15" ? "Midterm (15%)" : "No PM Fee";
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
   const netRevenue=totalRevenueReceived-totalExpenses+creditAmt;
@@ -377,8 +377,9 @@ function StatementBuilder({ token }) {
                 <label style={S.lbl}>Rate</label>
                 <select style={S.sel} value={pmRate} onChange={e=>setPmRate(e.target.value)}>
                   <option value="0.25">25% — Short-term</option>
-                  <option value="0.15">15% — Midterm</option>
-                  <option value="0">0% — No PM Fee</option>
+<option value="0.20">20% — Short-term</option>
+<option value="0.15">15% — Midterm</option>
+<option value="0">0% — No PM Fee</option>
                 </select>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}>
