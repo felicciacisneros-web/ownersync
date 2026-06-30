@@ -8,7 +8,7 @@ const EXPENSE_CATEGORIES = [
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const LOGO_URL = "https://ownersync.vercel.app/logopng.png";
+const LOGO_URL = "https://ownersync.vercel.app/logo2.jpg";
 
 const OWNER_PROPERTIES = [
   "Beautiful Victorian, Amazing View!",
@@ -83,11 +83,12 @@ function StatementBuilder({ token }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reservations, setReservations] = useState([]);
-  const [lloydReservations, setLloydReservations] = useState([]); // {unit, channel, amt, guest, arrival, nights}
+  const [lloydReservations, setLloydReservations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [midtermRevenue, setMidtermRevenue] = useState("");
   const [midtermNote, setMidtermNote] = useState("");
+  const [revenueAdjustment, setRevenueAdjustment] = useState("");
   const [platformFees, setPlatformFees] = useState({ airbnbHostFee:"", stripeFee:"", airbnbTax:"" });
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
@@ -104,7 +105,6 @@ function StatementBuilder({ token }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message||"Error loading properties");
         const sorted = (data.result||[]).sort((a,b) => (a.internalListingName||a.name).localeCompare(b.internalListingName||b.name));
-        // Filter out individual Lloyd units from dropdown, add group instead
         const lloydIds = LLOYD_UNITS.map(u=>u.id);
         const filtered = sorted.filter(l => !lloydIds.includes(l.id));
         setListings([LLOYD_GROUP, ...filtered]);
@@ -121,7 +121,6 @@ function StatementBuilder({ token }) {
       const end = `${selectedYear}-${String(m).padStart(2,"0")}-${new Date(selectedYear,m,0).getDate()}`;
 
       if (selectedListing.isGroup) {
-        // Fetch all 3 Lloyd units
         const allUnitRes = await Promise.all(LLOYD_UNITS.map(unit =>
           fetch(`${PROXY}/v1/reservations?listingId=${unit.id}&startDate=${start}&endDate=${end}&limit=100`, { headers:{ Authorization:`Bearer ${token}` } })
             .then(r=>r.json())
@@ -130,13 +129,13 @@ function StatementBuilder({ token }) {
         const all = allUnitRes.flat();
         const seen = new Set();
         const results = all.filter(r => {
-  const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
-  const arrival = (r.arrivalDate||"").substring(0,10);
-  const status = (r.status||"").toLowerCase();
-  const key = `${r._unitLabel}-${arrival}-${payout}`;
-  const channel = getChannel(r);
-  if (channel === "Airbnb") return false;
-  if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired" && status !== "declined") {
+          const payout = parseFloat(r.airbnbExpectedPayoutAmount||0) || parseFloat(r.totalPrice||0);
+          const arrival = (r.arrivalDate||"").substring(0,10);
+          const status = (r.status||"").toLowerCase();
+          const key = `${r._unitLabel}-${arrival}-${payout}`;
+          const channel = getChannel(r);
+          if (channel === "Airbnb") return false;
+          if (payout > 0 && arrival >= start && arrival <= end && !seen.has(key) && status !== "cancelled" && status !== "canceled" && status !== "inquiry" && status !== "request" && status !== "expired" && status !== "declined") {
             seen.add(key);
             return true;
           }
@@ -175,7 +174,6 @@ function StatementBuilder({ token }) {
   const isOwnerProperty = OWNER_PROPERTIES.includes(selectedListing?.name || "") || selectedListing?.isGroup;
   const statementName = selectedListing?.isGroup ? "Brewers Hill Belle" : (selectedListing?.name || "");
 
-  // Regular revenue by channel
   const revenueByChannel = reservations.reduce((acc, r) => {
     const channel = getChannel(r);
     const amt = channel === "Airbnb"
@@ -186,20 +184,18 @@ function StatementBuilder({ token }) {
     return acc;
   }, {});
 
-  // Lloyd revenue by unit+channel
   const lloydRevenueRows = lloydReservations.map(r => ({
     unit: r._unitLabel,
     channel: getChannel(r),
     amt: parseFloat(r.totalPrice||0),
-    guest: r.guestName||"—",
-    arrival: (r.arrivalDate||"").substring(0,10),
-    nights: r.nights||"—",
   }));
   const lloydTotal = lloydRevenueRows.reduce((s,r)=>s+r.amt,0);
 
+  const adjustmentAmt = parseFloat(revenueAdjustment)||0;
   const midtermAmt = parseFloat(midtermRevenue)||0;
   const creditAmt = parseFloat(creditAmount)||0;
-  const grossRevenue = (selectedListing?.isGroup ? lloydTotal : Object.values(revenueByChannel).reduce((s,v)=>s+v,0)) + midtermAmt;
+  const grossRevenueRaw = (selectedListing?.isGroup ? lloydTotal : Object.values(revenueByChannel).reduce((s,v)=>s+v,0)) + midtermAmt;
+  const grossRevenue = grossRevenueRaw + adjustmentAmt;
   const af=parseFloat(platformFees.airbnbHostFee)||0;
   const at=parseFloat(platformFees.airbnbTax)||0;
   const sf=parseFloat(platformFees.stripeFee)||0;
@@ -297,7 +293,7 @@ function StatementBuilder({ token }) {
                         <td style={{...S.td,textAlign:"right"}}>{fmt(r.amt)}</td>
                       </tr>
                     ))}
-                    <tr style={{background:"#0f172a"}}><td style={S.td} colSpan={2}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(lloydTotal)}</strong></td></tr>
+                    <tr style={{background:"#0f172a"}}><td style={S.td} colSpan={2}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td></tr>
                   </tbody>
                 </table>
               ) : (
@@ -308,7 +304,7 @@ function StatementBuilder({ token }) {
                     {Object.entries(revenueByChannel).map(([ch,amt])=>(
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
-                        <td style={{...S.td,textAlign:"right"}}>{fmt(amt)}</td>
+                        <td style={{...S.td,textAlign:"right"}}>{fmt(amt + (ch === Object.keys(revenueByChannel)[Object.keys(revenueByChannel).length-1] ? adjustmentAmt : 0))}</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td></tr>
@@ -322,6 +318,12 @@ function StatementBuilder({ token }) {
                   <input style={S.inpSm} type="number" value={midtermRevenue} onChange={e=>setMidtermRevenue(e.target.value)} placeholder="0.00"/>
                   <input style={S.inpSm} value={midtermNote} onChange={e=>setMidtermNote(e.target.value)} placeholder="e.g. John Smith"/>
                 </div>
+              </div>
+
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #334155"}}>
+                <label style={S.lbl}>Revenue Adjustment <span style={{color:"#64748b",fontSize:10,textTransform:"none"}}>(reembolsos — solo visible en editor)</span></label>
+                <input style={S.inpSm} type="number" value={revenueAdjustment} onChange={e=>setRevenueAdjustment(e.target.value)} placeholder="e.g. -150.00"/>
+                {adjustmentAmt !== 0 && <p style={{color:"#f59e0b",fontSize:11,marginTop:6}}>Adjustment: {adjustmentAmt > 0 ? "+" : ""}{fmt(adjustmentAmt)}</p>}
               </div>
             </div>
 
@@ -377,9 +379,9 @@ function StatementBuilder({ token }) {
                 <label style={S.lbl}>Rate</label>
                 <select style={S.sel} value={pmRate} onChange={e=>setPmRate(e.target.value)}>
                   <option value="0.25">25% — Short-term</option>
-<option value="0.20">20% — Short-term</option>
-<option value="0.15">15% — Midterm</option>
-<option value="0">0% — No PM Fee</option>
+                  <option value="0.20">20% — Short-term</option>
+                  <option value="0.15">15% — Midterm</option>
+                  <option value="0">0% — No PM Fee</option>
                 </select>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}>
@@ -395,7 +397,7 @@ function StatementBuilder({ token }) {
                 <input style={S.inpSm} type="number" value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} placeholder="0.00"/>
                 <input style={S.inpSm} value={creditNote} onChange={e=>setCreditNote(e.target.value)} placeholder="e.g. Damage deposit refund"/>
               </div>
-              {creditAmt > 0 && <p style={{color:"#16a34a",fontSize:11,marginTop:8}}>+{fmt(creditAmt)} added to Net Revenue</p>}
+              {creditAmt !== 0 && <p style={{color:"#16a34a",fontSize:11,marginTop:8}}>{creditAmt > 0 ? "+" : ""}{fmt(creditAmt)} added to Net Revenue</p>}
             </div>
           </div>
           <div>
@@ -454,9 +456,9 @@ function StatementBuilder({ token }) {
                 </>
               ) : (
                 <>
-                  {Object.entries(revenueByChannel).map(([ch,amt])=>(
+                  {Object.entries(revenueByChannel).map(([ch,amt],idx,arr)=>(
                     <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                      <span>{ch}</span><span>{fmt(amt)}</span>
+                      <span>{ch}</span><span>{fmt(amt + (idx === arr.length-1 ? adjustmentAmt : 0))}</span>
                     </div>
                   ))}
                   {midtermAmt > 0 && (
@@ -499,10 +501,10 @@ function StatementBuilder({ token }) {
               )}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Expenses</span><span>{fmt(totalExpenses)}</span></div>
             </div>
-            {creditAmt > 0 && (
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"8px 0",borderBottom:"1px dotted #475569",color:"#16a34a"}}>
+            {creditAmt !== 0 && (
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"8px 0",borderBottom:"1px dotted #475569",color:creditAmt>0?"#16a34a":"#dc2626"}}>
                 <span>Credit{creditNote ? " — " + creditNote : ""}</span>
-                <span>+{fmt(creditAmt)}</span>
+                <span>{creditAmt>0?"+":"-"}{fmt(creditAmt)}</span>
               </div>
             )}
             <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:"bold",padding:"16px 0",borderTop:"3px double #475569",color:netRevenue<0?"#dc2626":"#16a34a"}}><span>Net Revenue</span><span>{fmtS(netRevenue)}</span></div>
