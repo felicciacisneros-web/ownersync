@@ -8,7 +8,7 @@ const EXPENSE_CATEGORIES = [
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const LOGO_URL = "https://ownersync.vercel.app/logo2.jpg";
+const LOGO_URL = "https://ownersync.vercel.app/logopng.png";
 
 const OWNER_PROPERTIES = [
   "Beautiful Victorian, Amazing View!",
