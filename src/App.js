@@ -8,7 +8,7 @@ const EXPENSE_CATEGORIES = [
 
 const PROXY = "https://hostaway-proxy.vercel.app/api/proxy";
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const LOGO_URL = "https://ownersync.vercel.app/logopng.png";
+const LOGO_URL = "https://ownersync.vercel.app/logo2.jpg";
 
 const OWNER_PROPERTIES = [
   "Beautiful Victorian, Amazing View!",
@@ -32,6 +32,15 @@ const LLOYD_UNITS = [
 ];
 
 const LLOYD_GROUP = { id: "lloyd-group", name: "Brewers Hill Belle", internalListingName: "Lloyd (All Units)", isGroup: true };
+
+const PM_OPTIONS = [
+  { value: "25st",  label: "25% — Short-term", rate: 0.25, tag: "Short-term (25%)" },
+  { value: "20st",  label: "20% — Short-term", rate: 0.20, tag: "Short-term (20%)" },
+  { value: "15mt",  label: "15% — Midterm",    rate: 0.15, tag: "Midterm (15%)" },
+  { value: "20mt",  label: "20% — Midterm",    rate: 0.20, tag: "Midterm (20%)" },
+  { value: "10lt",  label: "10% — Long-term",  rate: 0.10, tag: "Long-term (10%)" },
+  { value: "0",     label: "0% — No PM Fee",   rate: 0,    tag: "No PM Fee" },
+];
 
 function AuthScreen({ onAuth }) {
   const [accountId, setAccountId] = useState("");
@@ -93,7 +102,7 @@ function StatementBuilder({ token }) {
   const [expenses, setExpenses] = useState(EXPENSE_CATEGORIES.map(cat=>({ category:cat, amount:"", note:"" })));
   const [extraExpenses, setExtraExpenses] = useState([]);
   const [view, setView] = useState("builder");
-  const [pmRate, setPmRate] = useState("0.25");
+  const [pmRateKey, setPmRateKey] = useState("25st");
   const [creditAmount, setCreditAmount] = useState("");
   const [creditNote, setCreditNote] = useState("");
 
@@ -201,9 +210,9 @@ function StatementBuilder({ token }) {
   const sf=parseFloat(platformFees.stripeFee)||0;
   const totalPlatformFees=af+at+sf;
   const totalRevenueReceived=grossRevenue-totalPlatformFees;
-  const selectedRate = parseFloat(pmRate)||0;
-  const pmFee = isOwnerProperty ? 0 : totalRevenueReceived * selectedRate;
-  const pmLabel = pmRate==="0.25" ? "Short-term (25%)" : pmRate==="0.20" ? "Short-term (20%)" : pmRate==="0.15" ? "Midterm (15%)" : "No PM Fee";
+  const selectedPmOption = PM_OPTIONS.find(o=>o.value===pmRateKey) || PM_OPTIONS[0];
+  const pmFee = isOwnerProperty ? 0 : totalRevenueReceived * selectedPmOption.rate;
+  const pmLabel = selectedPmOption.tag;
   const manualExp=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+extraExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalExpenses=manualExp+pmFee;
   const netRevenue=totalRevenueReceived-totalExpenses+creditAmt;
@@ -301,10 +310,10 @@ function StatementBuilder({ token }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr><th style={S.th}>Channel</th><th style={{...S.th,textAlign:"right"}}>Revenue</th></tr></thead>
                   <tbody>
-                    {Object.entries(revenueByChannel).map(([ch,amt])=>(
+                    {Object.entries(revenueByChannel).map(([ch,amt],idx,arr)=>(
                       <tr key={ch}>
                         <td style={S.td}>{ch}</td>
-                        <td style={{...S.td,textAlign:"right"}}>{fmt(amt + (ch === Object.keys(revenueByChannel)[Object.keys(revenueByChannel).length-1] ? adjustmentAmt : 0))}</td>
+                        <td style={{...S.td,textAlign:"right"}}>{fmt(amt + (idx===arr.length-1 ? adjustmentAmt : 0))}</td>
                       </tr>
                     ))}
                     <tr style={{background:"#0f172a"}}><td style={S.td}><strong>Total Gross Revenue</strong></td><td style={{...S.td,textAlign:"right"}}><strong>{fmt(grossRevenue)}</strong></td></tr>
@@ -377,11 +386,8 @@ function StatementBuilder({ token }) {
               <h3 style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",textTransform:"uppercase"}}>PM Fee</h3>
               <div style={{marginBottom:12}}>
                 <label style={S.lbl}>Rate</label>
-                <select style={S.sel} value={pmRate} onChange={e=>setPmRate(e.target.value)}>
-                  <option value="0.25">25% — Short-term</option>
-                  <option value="0.20">20% — Short-term</option>
-                  <option value="0.15">15% — Midterm</option>
-                  <option value="0">0% — No PM Fee</option>
+                <select style={S.sel} value={pmRateKey} onChange={e=>setPmRateKey(e.target.value)}>
+                  {PM_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",fontSize:13,borderTop:"2px solid #334155"}}>
@@ -458,7 +464,7 @@ function StatementBuilder({ token }) {
                 <>
                   {Object.entries(revenueByChannel).map(([ch,amt],idx,arr)=>(
                     <div key={ch} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}>
-                      <span>{ch}</span><span>{fmt(amt + (idx === arr.length-1 ? adjustmentAmt : 0))}</span>
+                      <span>{ch}</span><span>{fmt(amt + (idx===arr.length-1 ? adjustmentAmt : 0))}</span>
                     </div>
                   ))}
                   {midtermAmt > 0 && (
@@ -472,7 +478,7 @@ function StatementBuilder({ token }) {
               )}
             </div>
             <div style={{marginBottom:20}}>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Fees</div>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#94a3b8",marginBottom:8,borderBottom:"1px solid #e2e8f0",paddingBottom:4}}>Platform Fees</div>
               {af>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Airbnb Host Fee</span><span>{fmt(af)}</span></div>}
               {at>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Airbnb Occupancy Tax</span><span>{fmt(at)}</span></div>}
               {sf>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"5px 0",borderBottom:"1px dotted #f1f5f9"}}><span>Stripe Booking Fee</span><span>{fmt(sf)}</span></div>}
@@ -501,6 +507,7 @@ function StatementBuilder({ token }) {
               )}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:"bold",padding:"8px 0",background:"#f8fafc",marginTop:4}}><span>Total Expenses</span><span>{fmt(totalExpenses)}</span></div>
             </div>
+            {!isOwnerProperty && <p style={{fontSize:10,color:"#94a3b8",marginBottom:12,fontStyle:"italic"}}>* PM Fee is calculated on Total Revenue Received after platform fees.</p>}
             {creditAmt !== 0 && (
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"8px 0",borderBottom:"1px dotted #475569",color:creditAmt>0?"#16a34a":"#dc2626"}}>
                 <span>Credit{creditNote ? " — " + creditNote : ""}</span>
